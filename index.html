@@ -18,16 +18,26 @@
             margin: 0;
             overflow: hidden; /* Prevent scrollbar from appearing during spin */
         }
+        /* Main content container to allow vertical scrolling if content overflows */
+        .main-content-wrapper {
+            max-height: 100vh; /* Limit height to viewport height */
+            overflow-y: auto; /* Enable vertical scrolling */
+            -webkit-overflow-scrolling: touch; /* Smooth scrolling on iOS */
+            padding: 1rem; /* Add some padding around the content */
+            box-sizing: border-box; /* Include padding in element's total width and height */
+        }
+
         .wheel-container {
             position: relative;
-            width: 90vmin; /* Responsive width based on viewport */
-            max-width: 500px; /* Max width for larger screens */
-            height: 90vmin;
-            max-height: 500px;
+            width: 70vmin; /* Responsive width based on viewport, reduced for mobile */
+            max-width: 400px; /* Max width for larger screens */
+            height: 70vmin;
+            max-height: 400px;
             display: flex;
             justify-content: center;
             align-items: center;
             margin-bottom: 2rem;
+            flex-shrink: 0; /* Prevent wheel from shrinking too much */
         }
         canvas {
             border-radius: 50%;
@@ -132,10 +142,11 @@
         }
     </style>
 </head>
-<body class="bg-gradient-to-br from-indigo-500 to-purple-600 flex flex-col items-center justify-center p-4">
+<body class="bg-gradient-to-br from-indigo-500 to-purple-600 flex flex-col items-center justify-center">
 
-    <div class="bg-white p-8 rounded-2xl shadow-xl max-w-2xl w-full flex flex-col items-center">
-        <h1 class="text-4xl font-extrabold text-gray-800 mb-6 text-center">Color Crush Studio</h1>
+    <div class="main-content-wrapper bg-white rounded-2xl shadow-xl max-w-2xl w-full flex flex-col items-center">
+        <h1 class="text-4xl font-extrabold text-gray-800 mb-4 text-center mt-8">Color Crush Studio</h1>
+        <p id="currentDateTime" class="text-sm text-gray-500 mb-6 text-center"></p>
         <p id="spin-status" class="text-lg text-gray-600 mb-8 text-center">Spin the wheel to win exciting rewards!</p>
 
         <div class="wheel-container">
@@ -156,6 +167,7 @@
             </div>
             <p class="text-md text-gray-500" id="noLuckMessage" style="display: none;">Better luck next time!</p>
         </div>
+        <div class="pb-8"></div> <!-- Padding at the bottom for scrollable content -->
     </div>
 
     <!-- Result Modal -->
@@ -164,6 +176,7 @@
             <button id="closeModalButton" class="modal-close-button">&times;</button>
             <h2 class="text-3xl font-bold text-gray-800 mb-4" id="modalTitle"></h2>
             <p class="text-xl text-gray-700 mb-4" id="modalWinnerText"></p>
+            <p id="modalDateTime" class="text-sm text-gray-500 mb-4"></p> <!-- Date/Time in modal -->
             <div id="modalCouponSection" class="hidden">
                 <p class="text-lg text-gray-600 mb-2">Your Coupon Code:</p>
                 <div class="flex items-center justify-center mb-4">
@@ -182,12 +195,7 @@
             const ctx = canvas.getContext('2d');
             const spinButton = document.getElementById('spinButton');
             const spinStatus = document.getElementById('spin-status');
-            const resultDisplay = document.getElementById('resultDisplay');
-            const winnerText = document.getElementById('winnerText');
-            const couponSection = document.getElementById('couponSection');
-            const couponCodeInput = document.getElementById('couponCodeInput');
-            const copyCouponButton = document.getElementById('copyCouponButton');
-            const noLuckMessage = document.getElementById('noLuckMessage');
+            const currentDateTimeDisplay = document.getElementById('currentDateTime'); // New element for main page date/time
 
             // Modal elements
             const resultModalOverlay = document.getElementById('resultModalOverlay');
@@ -195,6 +203,7 @@
             const modalCloseButtonBottom = document.getElementById('modalCloseButtonBottom');
             const modalTitle = document.getElementById('modalTitle');
             const modalWinnerText = document.getElementById('modalWinnerText');
+            const modalDateTimeDisplay = document.getElementById('modalDateTime'); // New element for modal date/time
             const modalCouponSection = document.getElementById('modalCouponSection');
             const modalCouponCodeInput = document.getElementById('modalCouponCodeInput');
             const modalCopyCouponButton = document.getElementById('modalCopyCouponButton');
@@ -220,6 +229,17 @@
 
             let currentRotation = 0;
             let isSpinning = false;
+
+            // Function to update the current date and time display
+            function updateCurrentDateTime() {
+                const now = new Date();
+                const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: 'numeric', minute: 'numeric', second: 'numeric', hour12: true };
+                currentDateTimeDisplay.textContent = now.toLocaleString('en-US', options);
+            }
+
+            // Update date/time immediately and every second
+            updateCurrentDateTime();
+            setInterval(updateCurrentDateTime, 1000);
 
             // Check localStorage on page load
             const hasSpun = localStorage.getItem('hasSpunWheel');
@@ -272,7 +292,7 @@
                 spinButton.disabled = true;
                 spinButton.textContent = 'SPINNING...';
                 spinButton.classList.add('opacity-70', 'cursor-not-allowed');
-                resultDisplay.classList.add('hidden'); // Hide previous result
+                // resultDisplay.classList.add('hidden'); // This was for the old on-page display, now using modal
                 hideModal(); // Hide modal if open
 
                 // Determine the winning slice based on weighted probability
@@ -314,24 +334,15 @@
                     spinButton.textContent = 'SPUN';
                     spinStatus.textContent = 'You have already spun the wheel.';
 
-                    // Display result in modal
-                    showModal(winningSlice);
+                    // Display result in modal, passing the time of spin
+                    const spinTime = new Date();
+                    showModal(winningSlice, spinTime);
 
                     // Reset transform for next potential spin (if page is reloaded)
                     // This is important so the next spin starts from a clean state without accumulated rotation
                     canvas.style.transition = 'none';
                     canvas.style.transform = `rotate(${finalTargetRotation % 360}deg)`; // Keep the final visual rotation
                 }, { once: true });
-            });
-
-            // Copy coupon functionality for main display (kept for completeness, though modal is primary)
-            copyCouponButton.addEventListener('click', () => {
-                couponCodeInput.select();
-                document.execCommand('copy');
-                copyCouponButton.textContent = 'Copied!';
-                setTimeout(() => {
-                    copyCouponButton.textContent = 'Copy';
-                }, 2000);
             });
 
             // Copy coupon functionality for modal
@@ -345,9 +356,13 @@
             });
 
             // Modal functions
-            function showModal(slice) {
+            function showModal(slice, spinTime) {
                 modalTitle.textContent = slice.type === 'Reward' ? 'Congratulations!' : 'Better Luck Next Time!';
                 modalWinnerText.textContent = `You won: ${slice.reward}!`;
+
+                // Display spin time in modal
+                const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: 'numeric', minute: 'numeric', second: 'numeric', hour12: true };
+                modalDateTimeDisplay.textContent = `Spin completed on: ${spinTime.toLocaleString('en-US', options)}`;
 
                 if (slice.type === 'Reward' && slice.couponCode) {
                     modalCouponSection.classList.remove('hidden');
